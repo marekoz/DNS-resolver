@@ -115,6 +115,41 @@ void convert_hostname_to_dns(char* hostname, unsigned char* result)
 	result[i+1] = '\0';
 }
 
+void convert_ip4_to_dns(char* ip4, unsigned char* result)
+{
+	int ip_len = strlen(ip4);
+	char *all_parts = (char*)malloc(16);
+	char *part = std::strtok(ip4, ".");
+	int i = 0;
+	while(part)
+	{
+		//std::cout << part << std::endl;
+		strcpy(&all_parts[i], part);
+		part = std::strtok(NULL, ".");
+		i += 4;
+	}
+
+
+	
+	int index = 0;
+	for(i = 0; i < 4; i++)
+	{
+		result[index] = strlen(&all_parts[(3-i)*4]);
+		index++;
+		strcpy((char *)&result[index], &all_parts[(3-i)*4]);
+		index += strlen(&all_parts[(3-i)*4]);
+	}
+
+	result[index] = 7;
+	index++;
+	strcpy((char *)&result[index], "in-addr");
+	index += strlen("in-addr");
+	result[index] = char(4);
+	index++;
+	strcpy((char *)&result[index], "arpa");
+	free(all_parts);
+	std::cout << result << std::endl;
+}
 
 std::string intToBinaryString(int value) {
     return std::bitset<sizeof(int) * 8>(value).to_string();
@@ -385,7 +420,7 @@ void get_hostname_reverse(struct parsed_arguments* args, const char* s_addr)
 
 	dns->id = (unsigned short) htons(getpid());
 	dns->qr = 0; //This is a query
-	dns->opcode = 1; //This is a standard query
+	dns->opcode = 0; //This is a inverse query
 	dns->aa = 0; //Not Authoritative
 	dns->tc = 0; //This message is not truncated
 	dns->rd = args->recursion;//Recursion Desired
@@ -405,8 +440,7 @@ void get_hostname_reverse(struct parsed_arguments* args, const char* s_addr)
 
 	std::cout <<  "-----------------" << "\n";
 	
-	convert_hostname_to_dns(args->hostname, qname);
-
+	convert_ip4_to_dns(args->hostname, qname);
 	std::cout << "qname length: "<< (strlen((char*)qname)) << "\n";
 	std::cout << "qname:  " 	<< (char*)qname << "\n";
 	std::cout <<  "-----------------" << "\n";
@@ -540,8 +574,8 @@ int main(int argc, char* argv[]) {
 		//std::cout << args->hostname << "\n";
 	}
 
-
-    const char* dns_server = "76.76.2.0";//;
+	
+    const char* dns_server = "147.229.190.143";//;
 	//get_address_type(args);
 	if (args->reverse)
 	{
