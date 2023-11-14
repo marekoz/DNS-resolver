@@ -1,5 +1,6 @@
 #include <iostream> //cout
 #include <cstring>
+#include <netdb.h> //gethostbyname()
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -10,6 +11,9 @@
 
 
 #define DNS_PORT 53
+#define TYPE_IP4 0
+#define TYPE_IP6 1
+#define TYPE_DOMAIN 2
 
 struct parsed_arguments
 {
@@ -117,7 +121,6 @@ void convert_hostname_to_dns(char* hostname, unsigned char* result)
 
 void convert_ip4_to_dns(char* ip4, unsigned char* result)
 {
-	int ip_len = strlen(ip4);
 	char *all_parts = (char*)malloc(16);
 	char *part = std::strtok(ip4, ".");
 	int i = 0;
@@ -162,18 +165,33 @@ bool is_qname_compressed(unsigned char* name)
 
 
 
-int get_address_type(struct parsed_arguments *args)
+int get_address_type(char *addr)
 {
 	//std::cout << std::endl <<args->server << std::endl;
 	std::regex ipv4Pattern(R"((\d{1,3}\.){3}\d{1,3})");
 	std::regex ipv6Pattern(R"(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}(:[0-9a-fA-F]{1,4}){1,7}|([0-9a-fA-F]{1,4}:){1,7}:|::)");
+
+
 	std::regex domainPattern(R"(([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})");
-	std::string server_str(reinterpret_cast<const char*>(args->hostname));
-	std::cout << args->hostname << std::endl;
-    std::cout << std::regex_match(server_str, ipv4Pattern) << std::endl;
-	std::cout << std::regex_match(server_str, ipv6Pattern) << std::endl;
-	std::cout << std::regex_match(server_str, domainPattern) << std::endl;
-	return 1;
+	std::string server_str(reinterpret_cast<const char*>(addr));
+	std::cout << addr << std::endl;
+
+	if (std::regex_match(server_str, ipv4Pattern))
+	{
+		std::cout << "ip4" << std::endl;
+		return TYPE_IP4;
+	}
+	else if (std::regex_match(server_str, ipv6Pattern))
+	{
+		std::cout << "ip6" << std::endl;
+		return TYPE_IP6;
+	}
+	else if (std::regex_match(server_str, domainPattern))
+	{
+		std::cout << "domain" << std::endl;
+		return TYPE_DOMAIN;
+	}
+	return -1;
 }
 
 void parse_arguments(int argc, char* argv[], struct parsed_arguments *args)
@@ -203,10 +221,12 @@ void parse_arguments(int argc, char* argv[], struct parsed_arguments *args)
 				args->port = std::stoi(optarg);
 				break;
 			case '?':
+				free(args);
 				exit(1);
 				break;
 			case 'h':
 				//TODO print help
+				free(args);
 				exit(0);
 				break;
 			default:
@@ -222,6 +242,7 @@ void parse_arguments(int argc, char* argv[], struct parsed_arguments *args)
 			if (non_opt_argc > 1)
 			{
 				std::cerr << "Too many arguments" << std::endl;
+				free(args);
 				exit(1);
 			}
 			optind++;
@@ -232,6 +253,7 @@ void parse_arguments(int argc, char* argv[], struct parsed_arguments *args)
 	if (non_opt_argc != 1)
 	{
 		std::cerr << "Missing address argument" << std::endl;
+		free(args);
 		exit(1);
 	}
 	//get_address_type(args);
@@ -240,66 +262,75 @@ void parse_arguments(int argc, char* argv[], struct parsed_arguments *args)
 	// we have only 1 non option argument - address
 }
 
-void get_hostname(struct parsed_arguments* args, const char* s_addr)
+
+void fill_dns_header(struct dns_header *dns, struct parsed_arguments *args)
 {
-	unsigned char buf[65536];
-	unsigned char *buf_pointer;
-
-	struct sockaddr_in dest;
-	
-	struct dns_header *dns = NULL;
-	struct dns_question *question = NULL;
-
-	std::cout << "\n" << args->port << "\n"; 
-	int sock = socket(AF_INET , SOCK_DGRAM , IPPROTO_UDP); //UDP packet for DNS queries
-	dest.sin_family = AF_INET;
-	dest.sin_port = htons(args->port);
-	dest.sin_addr.s_addr = inet_addr(s_addr);
-
-	dns = (struct dns_header *)&buf;
-
 	dns->id = (unsigned short) htons(getpid());
-	dns->qr = 0; //This is a query
-	dns->opcode = 0; //This is a standard query
-	dns->aa = 0; //Not Authoritative
-	dns->tc = 0; //This message is not truncated
-	dns->rd = args->recursion;//Recursion Desired
-	dns->ra = 0; //Recursion not available! hey we dont have it (lol)
+	dns->qr = 0; // query
+	dns->opcode = 0; // normal query
+	dns->aa = 0; // not authoritive
+	dns->tc = 0; // not truncated
+	dns->rd = args->recursion; //Recursion Desired
+	dns->ra = 0; 
 	dns->z = 0;
 	dns->ad = 0;
 	dns->cd = 0;
 	dns->rcode = 0;
-	dns->q_count = htons(1); //we have only 1 question
+	dns->q_count = htons(1); //1 question
 	dns->ans_count = 0;
 	dns->auth_count = 0;
 	dns->add_count = 0;
+}
+
+void send_dns_query(struct parsed_arguments* args)
+{
+	//get s_addr -s type - ip4, ip6, hostname
+
+	//if ip4
+	struct sockaddr_in dest;
+	std::cout << "\n" << args->port << "\n"; 
+	int sock = socket(AF_INET , SOCK_DGRAM , IPPROTO_UDP); //UDP packet for DNS queries
+	dest.sin_family = AF_INET;
+
+	dest.sin_port = htons(args->port);
+	dest.sin_addr.s_addr = inet_addr(args->server);
 
 
+	struct dns_header *dns = NULL;
+	struct dns_question *question = NULL;
+	unsigned char buf[65536];
+	unsigned char *buf_pointer;
+	dns = (struct dns_header *)&buf;
+
+	fill_dns_header(dns, args);
+	
 	unsigned char *qname;
 	qname =(unsigned char*)&buf[sizeof(struct dns_header)];
 
-	std::cout <<  "-----------------" << "\n";
-	
-	convert_hostname_to_dns(args->hostname, qname);
+	if (args->reverse == 0)
+	{
+		//if hostname == hostname
+		convert_hostname_to_dns(args->hostname, qname);
+	}
+	else
+	{
+		//if hostname == ip4
+		convert_ip4_to_dns(args->hostname, qname);
+		//else convert_ip6_to_dns
+	}
 
-	std::cout << "qname length: "<< (strlen((char*)qname)) << "\n";
-	std::cout << "qname:  " 	<< (char*)qname << "\n";
-	std::cout <<  "-----------------" << "\n";
-	
 	question =(struct dns_question*)&buf[sizeof(dns_header)+ strlen((const char *)qname) + 1]; // +1 because of 0 at the end of string
 
-	question->qtype = (args->ip6) ? htons(28) : htons(1);//type of the query , A , MX , CNAME , NS etc
+	if (args->reverse == 0)
+	{
+		question->qtype = (args->ip6) ? htons(28) : htons(1);// type of the query, 1-A, 28-AAAA, 12 - PTR
+	}
+	else
+	{
+		question->qtype = htons(12); // PTR
+	}
+
 	question->qclass = htons(1); // type IN
-
-
-
-	buf_pointer = &buf[sizeof(struct dns_header)];
-	std::cout << buf_pointer << "\n";
-	for (size_t i = 0; i < strlen((const char *)qname) +1; i++) {
-        std::bitset<8> binaryByte(buf_pointer[i]);
-        std::cout << binaryByte << " "; // Print each byte in binary
-    }
-
 
 	printf("\nSending Packet...");
 	if( sendto(sock,(char*)buf,sizeof(struct dns_header) + (strlen((const char*)qname)+1) + 4,0,(struct sockaddr*)&dest,sizeof(dest)) < 0)
@@ -308,10 +339,7 @@ void get_hostname(struct parsed_arguments* args, const char* s_addr)
 	}
 	printf("Done");
 
-
-
-	//Receive the answer
-	int i = sizeof dest;
+	int i = sizeof(dest);
 	printf("\nReceiving answer...");
 	if(recvfrom (sock,(char*)buf , 65536 , 0 , (struct sockaddr*)&dest , (socklen_t*)&i ) < 0)
 	{
@@ -320,24 +348,9 @@ void get_hostname(struct parsed_arguments* args, const char* s_addr)
 	printf("Done\n");
 
 	dns = (struct dns_header*) buf;
-
-	printf("\nThe response contains : ");
-	printf("\n %d Questions.",ntohs(dns->q_count));
-	printf("\n %d Answers.",ntohs(dns->ans_count));
-	printf("\n %d Authoritative Servers.",ntohs(dns->auth_count));
-	printf("\n %d response code.\n\n",ntohs(dns->rcode));
-	
-	int answer_count = ntohs(dns->ans_count); // Number of answers in the response
-	std::cout << "answer count: " << answer_count << "\n";
-
-
-
+	//int answer_count = ntohs(dns->ans_count); // Number of answers in the response
+	//std::cout << "answer count: " << answer_count << "\n";
 	buf_pointer = &buf[sizeof(struct dns_header) + sizeof(struct dns_question)  + (strlen((const char*)qname)+1)];
-	// std::cout << "qname" << "\n";
-	// 	for (size_t i = 0; i < 12; i++) {
-    //     std::bitset<8> binaryByte(buf_pointer[i]);
-    //     std::cout << binaryByte << " "; // Print each byte in binary
-    // }
 
 	struct dns_answer *answer = NULL;
 	if (is_qname_compressed(buf_pointer))
@@ -353,216 +366,54 @@ void get_hostname(struct parsed_arguments* args, const char* s_addr)
 		std::cout << "name is not compressed" << "\n";
 	}
 
-	std::cout <<  sizeof(struct dns_answer) << "\n";
-	std::cout << "answer info" << "\n";
-	std::cout << "type: " << ntohs(answer->type) << std::endl;
-	std::cout << "class: " << ntohs(answer->_class) << std::endl;
-	std::cout << "ttl: " << ntohl(answer->ttl) << std::endl;
-	std::cout << "data_len: " << ntohs(answer->data_len) << std::endl;
-
-	// for (size_t i = 0; i < 12; i++) {
-    //     std::bitset<8> binaryByte(buf_pointer[i]);
-    //     std::cout << binaryByte << " "; // Print each byte in binary
-    // }
+	if (false)
+	{
+		std::cout <<  sizeof(struct dns_answer) << "\n";
+		std::cout << "answer info" << "\n";
+		std::cout << "type: " << ntohs(answer->type) << std::endl;
+		std::cout << "class: " << ntohs(answer->_class) << std::endl;
+		std::cout << "ttl: " << ntohl(answer->ttl) << std::endl;
+		std::cout << "data_len: " << ntohs(answer->data_len) << std::endl;
+	}
 
 	//move ahead of the dns header and the query field
 	buf_pointer = &buf[sizeof(struct dns_header) + (strlen((const char*)qname)+1) + sizeof(struct dns_question) +  sizeof(struct dns_answer)];
 
 
-	// for (size_t i = 0; i < 32; i++) {
-    // 	std::bitset<8> binaryByte(buf_pointer[i]);
-    // 	std::cout << binaryByte << " "; // Print each byte in binary
-    // }
-	std::cout << "address:   " << "\n";
-	if (args->ip6)
+	if (args->reverse == 0)
 	{
-		int i = 0;
-		for(i; i < 8; i += 2)
+		if (args->ip6)
 		{
+			//ipv6
+			for(int i = 0; i < 8; i += 2)
+			{
+				std::cout << std::hex << ((int)buf_pointer[i]);
+				std::cout << std::hex << ((int)buf_pointer[i+1]);
+				std::cout << ":";
+			}
 			std::cout << std::hex << ((int)buf_pointer[i]);
 			std::cout << std::hex << ((int)buf_pointer[i+1]);
-			std::cout << ":";
+			std::cout << std::endl;
 		}
-		std::cout << std::hex << ((int)buf_pointer[i]);
-		std::cout << std::hex << ((int)buf_pointer[i+1]);
-		std::cout << std::endl;
-		
-	}
-	else
-	{
-		std::cout << (int)buf_pointer[0] << "." << (int)buf_pointer[1] << "."<< (int)buf_pointer[2] << "." <<  (int)buf_pointer[3] << "\n";
-	}
-	
-// 	for (size_t i = 0; i < 4; i++) {
-//         std::bitset<8> binaryByte(buf_pointe[i]);
-//         std::cout << binaryByte << " "; // Print each byte in binary
-//     }
-}
-
-
-void get_hostname_reverse(struct parsed_arguments* args, const char* s_addr)
-{
-	unsigned char buf[65536];
-	unsigned char *buf_pointer;
-
-	struct sockaddr_in dest;
-	
-	struct dns_header *dns = NULL;
-	struct dns_question *question = NULL;
-
-	std::cout << "\n" << args->port << "\n"; 
-	int sock = socket(AF_INET , SOCK_DGRAM , IPPROTO_UDP); //UDP packet for DNS queries
-	dest.sin_family = AF_INET;
-	dest.sin_port = htons(args->port);
-	dest.sin_addr.s_addr = inet_addr(s_addr);
-
-	dns = (struct dns_header *)&buf;
-
-	dns->id = (unsigned short) htons(getpid());
-	dns->qr = 0; //This is a query
-	dns->opcode = 0; //This is a inverse query
-	dns->aa = 0; //Not Authoritative
-	dns->tc = 0; //This message is not truncated
-	dns->rd = args->recursion;//Recursion Desired
-	dns->ra = 0; //Recursion not available! hey we dont have it (lol)
-	dns->z = 0;
-	dns->ad = 0;
-	dns->cd = 0;
-	dns->rcode = 0;
-	dns->q_count = htons(1); //we have only 1 question
-	dns->ans_count = 0;
-	dns->auth_count = 0;
-	dns->add_count = 0;
-
-
-	unsigned char *qname;
-	qname =(unsigned char*)&buf[sizeof(struct dns_header)];
-
-	std::cout <<  "-----------------" << "\n";
-	
-	convert_ip4_to_dns(args->hostname, qname);
-	std::cout << "qname length: "<< (strlen((char*)qname)) << "\n";
-	std::cout << "qname:  " 	<< (char*)qname << "\n";
-	std::cout <<  "-----------------" << "\n";
-	
-	question =(struct dns_question*)&buf[sizeof(dns_header)+ strlen((const char *)qname) + 1]; // +1 because of 0 at the end of string
-
-	question->qtype =  htons(12);//type of the query , A , MX , CNAME , NS etc
-	question->qclass = htons(1); // type IN
-
-
-
-	buf_pointer = &buf[sizeof(struct dns_header)];
-	std::cout << buf_pointer << "\n";
-	for (size_t i = 0; i < strlen((const char *)qname) +1; i++) {
-        std::bitset<8> binaryByte(buf_pointer[i]);
-        std::cout << binaryByte << " "; // Print each byte in binary
-    }
-
-
-	printf("\nSending Packet...");
-	if( sendto(sock,(char*)buf,sizeof(struct dns_header) + (strlen((const char*)qname)+1) + 4,0,(struct sockaddr*)&dest,sizeof(dest)) < 0)
-	{
-		perror("sendto failed");
-	}
-	printf("Done");
-
-
-
-	//Receive the answer
-	int i = sizeof dest;
-	printf("\nReceiving answer...");
-	if(recvfrom (sock,(char*)buf , 65536 , 0 , (struct sockaddr*)&dest , (socklen_t*)&i ) < 0)
-	{
-		perror("recvfrom failed");
-	}
-	printf("Done\n");
-
-	dns = (struct dns_header*) buf;
-
-	printf("\nThe response contains : ");
-	printf("\n %d Questions.",ntohs(dns->q_count));
-	printf("\n %d Answers.",ntohs(dns->ans_count));
-	printf("\n %d Authoritative Servers.",ntohs(dns->auth_count));
-	printf("\n %d response code.\n\n",ntohs(dns->rcode));
-	
-	int answer_count = ntohs(dns->ans_count); // Number of answers in the response
-	std::cout << "answer count: " << answer_count << "\n";
-
-
-
-	buf_pointer = &buf[sizeof(struct dns_header) + sizeof(struct dns_question)  + (strlen((const char*)qname)+1)];
-	// std::cout << "qname" << "\n";
-	// 	for (size_t i = 0; i < 12; i++) {
-    //     std::bitset<8> binaryByte(buf_pointer[i]);
-    //     std::cout << binaryByte << " "; // Print each byte in binary
-    // }
-
-	struct dns_answer *answer = NULL;
-	if (is_qname_compressed(buf_pointer))
-	{
-		unsigned int name_pointer;
-		name_pointer = buf[sizeof(struct dns_header) + sizeof(struct dns_question)  + (strlen((const char*)qname)+1) + 1];
-		buf_pointer = &buf[name_pointer];
-		answer = (struct dns_answer*)&buf[sizeof(struct dns_header) + (strlen((const char*)qname)+1) + sizeof(struct dns_question) + 2];
-	}
-	else
-	{
-		answer = (struct dns_answer*)&buf[sizeof(struct dns_header) + (strlen((const char*)qname)+1)*2 + sizeof(struct dns_question)];
-		std::cout << "name is not compressed" << "\n";
-	}
-
-	std::cout <<  sizeof(struct dns_answer) << "\n";
-	std::cout << "answer info" << "\n";
-	std::cout << "type: " << ntohs(answer->type) << std::endl;
-	std::cout << "class: " << ntohs(answer->_class) << std::endl;
-	std::cout << "ttl: " << ntohl(answer->ttl) << std::endl;
-	std::cout << "data_len: " << ntohs(answer->data_len) << std::endl;
-
-	// for (size_t i = 0; i < 12; i++) {
-    //     std::bitset<8> binaryByte(buf_pointer[i]);
-    //     std::cout << binaryByte << " "; // Print each byte in binary
-    // }
-
-	//move ahead of the dns header and the query field
-	buf_pointer = &buf[sizeof(struct dns_header) + (strlen((const char*)qname)+1) + sizeof(struct dns_question) +  sizeof(struct dns_answer)];
-
-
-	// for (size_t i = 0; i < 32; i++) {
-    // 	std::bitset<8> binaryByte(buf_pointer[i]);
-    // 	std::cout << binaryByte << " "; // Print each byte in binary
-    // }
-	std::cout << "address:   " << "\n";
-	if (args->ip6)
-	{
-		int i = 0;
-		for(i; i < 8; i += 2)
+		else
 		{
-			std::cout << std::hex << ((int)buf_pointer[i]);
-			std::cout << std::hex << ((int)buf_pointer[i+1]);
-			std::cout << ":";
+			//ipv4
+			std::cout << (int)buf_pointer[0] << "." << (int)buf_pointer[1] << "."<< (int)buf_pointer[2] << "." <<  (int)buf_pointer[3] << "\n";
 		}
-		std::cout << std::hex << ((int)buf_pointer[i]);
-		std::cout << std::hex << ((int)buf_pointer[i+1]);
-		std::cout << std::endl;
-		
 	}
 	else
 	{
-		std::cout << (int)buf_pointer[0] << "." << (int)buf_pointer[1] << "."<< (int)buf_pointer[2] << "." <<  (int)buf_pointer[3] << "\n";
+		//reverse
+
 	}
-	
-// 	for (size_t i = 0; i < 4; i++) {
-//         std::bitset<8> binaryByte(buf_pointe[i]);
-//         std::cout << binaryByte << " "; // Print each byte in binary
-//     }
 }
+
 
 int main(int argc, char* argv[]) {
 
-	struct parsed_arguments *args = (struct parsed_arguments*)malloc(sizeof(struct parsed_arguments) + 256);
+	struct parsed_arguments *args = (struct parsed_arguments*)malloc(sizeof(struct parsed_arguments));
 	args->port = DNS_PORT;
-
+	strcpy(args->server, "8.8.8.8");
 	parse_arguments(argc, argv, args);
 	if (1 == 12)
 	{
@@ -573,21 +424,22 @@ int main(int argc, char* argv[]) {
 		std::cout << "port: " << args->port << "\n";
 		//std::cout << args->hostname << "\n";
 	}
-
-	
-    const char* dns_server = "147.229.190.143";//;
-	//get_address_type(args);
-	if (args->reverse)
+	int server_type = get_address_type(args->server);
+	switch(server_type)
 	{
-		std::cout << "reverse" << std::endl;
-		get_hostname_reverse(args, dns_server);
+		case TYPE_DOMAIN:
+			struct hostent *host_info;
+			host_info = gethostbyname(args->server);
+			strcpy(args->server, host_info->h_name);
+			send_dns_query(args);
+			break;
+		case TYPE_IP4:
+			send_dns_query(args);
+			break;
+		case TYPE_IP6:
+			break;
 	}
-	else
-	{
-		std::cout << "normal" << std::endl;
-		get_hostname(args, dns_server);
-	}
-	
 
+	free(args);
     return 0;
 }
