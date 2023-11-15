@@ -1,6 +1,7 @@
 #include <iostream> //cout
 #include <cstring>
 #include <netdb.h> //gethostbyname()
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -151,7 +152,6 @@ void convert_ip4_to_dns(char* ip4, unsigned char* result)
 	index++;
 	strcpy((char *)&result[index], "arpa");
 	free(all_parts);
-	std::cout << result << std::endl;
 }
 
 std::string intToBinaryString(int value) {
@@ -170,29 +170,27 @@ int get_address_type(char *addr)
 	//std::cout << std::endl <<args->server << std::endl;
 	std::regex ipv4Pattern(R"((\d{1,3}\.){3}\d{1,3})");
 	std::regex ipv6Pattern(R"(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}(:[0-9a-fA-F]{1,4}){1,7}|([0-9a-fA-F]{1,4}:){1,7}:|::)");
-
-
 	std::regex domainPattern(R"(([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})");
 	std::string server_str(reinterpret_cast<const char*>(addr));
-	std::cout << addr << std::endl;
 
 	if (std::regex_match(server_str, ipv4Pattern))
 	{
-		std::cout << "ip4" << std::endl;
+		//std::cout << "ip4" << std::endl;
 		return TYPE_IP4;
 	}
 	else if (std::regex_match(server_str, ipv6Pattern))
 	{
-		std::cout << "ip6" << std::endl;
+		//std::cout << "ip6" << std::endl;
 		return TYPE_IP6;
 	}
 	else if (std::regex_match(server_str, domainPattern))
 	{
-		std::cout << "domain" << std::endl;
+		//std::cout << "domain" << std::endl;
 		return TYPE_DOMAIN;
 	}
 	return -1;
 }
+
 
 void parse_arguments(int argc, char* argv[], struct parsed_arguments *args)
 {
@@ -226,6 +224,7 @@ void parse_arguments(int argc, char* argv[], struct parsed_arguments *args)
 				break;
 			case 'h':
 				//TODO print help
+				std::cout << "Usage: dns [-r] [-x] [-6] -s server [-p port] address" << std::endl;
 				free(args);
 				exit(0);
 				break;
@@ -288,7 +287,6 @@ void send_dns_query(struct parsed_arguments* args)
 
 	//if ip4
 	struct sockaddr_in dest;
-	std::cout << "\n" << args->port << "\n"; 
 	int sock = socket(AF_INET , SOCK_DGRAM , IPPROTO_UDP); //UDP packet for DNS queries
 	dest.sin_family = AF_INET;
 
@@ -306,15 +304,16 @@ void send_dns_query(struct parsed_arguments* args)
 	
 	unsigned char *qname;
 	qname =(unsigned char*)&buf[sizeof(struct dns_header)];
-
 	if (args->reverse == 0)
 	{
 		//if hostname == hostname
+		//otherwise done
 		convert_hostname_to_dns(args->hostname, qname);
 	}
 	else
 	{
 		//if hostname == ip4
+		//-6 cant because its  AAAA and -x is PTR hmmmmm
 		convert_ip4_to_dns(args->hostname, qname);
 		//else convert_ip6_to_dns
 	}
@@ -331,16 +330,15 @@ void send_dns_query(struct parsed_arguments* args)
 	}
 
 	question->qclass = htons(1); // type IN
-
-	printf("\nSending Packet...");
+	printf("Sending Packet...");
 	if( sendto(sock,(char*)buf,sizeof(struct dns_header) + (strlen((const char*)qname)+1) + 4,0,(struct sockaddr*)&dest,sizeof(dest)) < 0)
 	{
 		perror("sendto failed");
 	}
-	printf("Done");
+	printf("Done\n");
 
 	int i = sizeof(dest);
-	printf("\nReceiving answer...");
+	printf("Receiving answer...");
 	if(recvfrom (sock,(char*)buf , 65536 , 0 , (struct sockaddr*)&dest , (socklen_t*)&i ) < 0)
 	{
 		perror("recvfrom failed");
@@ -384,7 +382,7 @@ void send_dns_query(struct parsed_arguments* args)
 	{
 		if (args->ip6)
 		{
-			//ipv6
+			//ipv6 TODO
 			for(int i = 0; i < 8; i += 2)
 			{
 				std::cout << std::hex << ((int)buf_pointer[i]);
@@ -403,9 +401,218 @@ void send_dns_query(struct parsed_arguments* args)
 	}
 	else
 	{
+		std::cout << "start" << std::endl;
 		//reverse
-
+		int i = 1;
+		while (buf_pointer[i] != '\0')
+		{
+			if (buf_pointer[i] < 64)
+			{
+				std::cout << '.';
+			}
+			std::cout << buf_pointer[i];
+			i++;
+		}
+		std::cout << std::endl;
+		std::cout << "end" << std::endl;
 	}
+}
+
+
+
+void send_dns_query_6(struct parsed_arguments* args)
+{
+	//get s_addr -s type - ip4, ip6, hostname
+
+	//if ip4
+	
+	int sock = socket(AF_INET6 , SOCK_DGRAM , IPPROTO_UDP); //UDP packet for DNS queries
+	
+
+	
+	struct sockaddr_in6 dest;
+	std::memset(&dest, 0, sizeof(dest));
+	dest.sin6_port = htons(args->port);
+	dest.sin6_family = AF_INET6;
+	std::cout << args->server << std::endl;
+	inet_pton(AF_INET6, args->server, &dest.sin6_addr);
+
+
+	struct dns_header *dns = NULL;
+	struct dns_question *question = NULL;
+	unsigned char buf[65536];
+	unsigned char *buf_pointer;
+	dns = (struct dns_header *)&buf;
+
+	fill_dns_header(dns, args);
+	
+	unsigned char *qname;
+	qname =(unsigned char*)&buf[sizeof(struct dns_header)];
+	if (args->reverse == 0)
+	{
+		//if hostname == hostname
+		//otherwise done
+		convert_hostname_to_dns(args->hostname, qname);
+	}
+	else
+	{
+		//if hostname == ip4
+		//-6 cant because its  AAAA and -x is PTR hmmmmm
+		convert_ip4_to_dns(args->hostname, qname);
+		//else convert_ip6_to_dns
+	}
+
+	question =(struct dns_question*)&buf[sizeof(dns_header)+ strlen((const char *)qname) + 1]; // +1 because of 0 at the end of string
+
+	if (args->reverse == 0)
+	{
+		question->qtype = (args->ip6) ? htons(28) : htons(1);// type of the query, 1-A, 28-AAAA, 12 - PTR
+	}
+	else
+	{
+		question->qtype = htons(12); // PTR
+	}
+
+	question->qclass = htons(1); // type IN
+	printf("Sending Packet...");
+	if( sendto(sock,(char*)buf,sizeof(struct dns_header) + (strlen((const char*)qname)+1) + 4,0,(struct sockaddr*)&dest,sizeof(dest)) < 0)
+	{
+		perror("sendto failed");
+	}
+	printf("Done\n");
+
+	int i = sizeof(dest);
+	printf("Receiving answer...");
+	if(recvfrom (sock,(char*)buf , 65536 , 0 , (struct sockaddr*)&dest , (socklen_t*)&i ) < 0)
+	{
+		perror("recvfrom failed");
+	}
+	printf("Done\n");
+
+	dns = (struct dns_header*) buf;
+	//int answer_count = ntohs(dns->ans_count); // Number of answers in the response
+	//std::cout << "answer count: " << answer_count << "\n";
+	buf_pointer = &buf[sizeof(struct dns_header) + sizeof(struct dns_question)  + (strlen((const char*)qname)+1)];
+
+	struct dns_answer *answer = NULL;
+	if (is_qname_compressed(buf_pointer))
+	{
+		unsigned int name_pointer;
+		name_pointer = buf[sizeof(struct dns_header) + sizeof(struct dns_question)  + (strlen((const char*)qname)+1) + 1];
+		buf_pointer = &buf[name_pointer];
+		answer = (struct dns_answer*)&buf[sizeof(struct dns_header) + (strlen((const char*)qname)+1) + sizeof(struct dns_question) + 2];
+	}
+	else
+	{
+		answer = (struct dns_answer*)&buf[sizeof(struct dns_header) + (strlen((const char*)qname)+1)*2 + sizeof(struct dns_question)];
+		std::cout << "name is not compressed" << "\n";
+	}
+
+	if (false)
+	{
+		std::cout <<  sizeof(struct dns_answer) << "\n";
+		std::cout << "answer info" << "\n";
+		std::cout << "type: " << ntohs(answer->type) << std::endl;
+		std::cout << "class: " << ntohs(answer->_class) << std::endl;
+		std::cout << "ttl: " << ntohl(answer->ttl) << std::endl;
+		std::cout << "data_len: " << ntohs(answer->data_len) << std::endl;
+	}
+
+	//move ahead of the dns header and the query field
+	buf_pointer = &buf[sizeof(struct dns_header) + (strlen((const char*)qname)+1) + sizeof(struct dns_question) +  sizeof(struct dns_answer)];
+
+
+	if (args->reverse == 0)
+	{
+		if (args->ip6)
+		{
+			//ipv6 TODO
+			for(int i = 0; i < 8; i += 2)
+			{
+				std::cout << std::hex << ((int)buf_pointer[i]);
+				std::cout << std::hex << ((int)buf_pointer[i+1]);
+				std::cout << ":";
+			}
+			std::cout << std::hex << ((int)buf_pointer[i]);
+			std::cout << std::hex << ((int)buf_pointer[i+1]);
+			std::cout << std::endl;
+		}
+		else
+		{
+			//ipv4
+			std::cout << (int)buf_pointer[0] << "." << (int)buf_pointer[1] << "."<< (int)buf_pointer[2] << "." <<  (int)buf_pointer[3] << "\n";
+		}
+	}
+	else
+	{
+		std::cout << "start" << std::endl;
+		//reverse
+		int i = 1;
+		while (buf_pointer[i] != '\0')
+		{
+			if (buf_pointer[i] < 64)
+			{
+				std::cout << '.';
+			}
+			std::cout << buf_pointer[i];
+			i++;
+		}
+		std::cout << std::endl;
+		std::cout << "end" << std::endl;
+	}
+}
+
+int send_dns_query_6_x(struct parsed_arguments* args)
+{
+	int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock == -1) {
+        std::cerr << "Socket creation failed.\n";
+        return 1;
+    }
+
+    const char *message = "Hello, IPv6!";
+
+    sockaddr_in6 serverAddress;
+    std::memset(&serverAddress, 0, sizeof(serverAddress));
+    serverAddress.sin6_family = AF_INET6; // Use IPv6
+    serverAddress.sin6_port = htons(8080); // Port to send data to
+
+    // Set the IPv6 address you want to send the packet to
+    if (inet_pton(AF_INET6, "2001:0db8:85a3:0000:0000:8a2e:0370:7334", &serverAddress.sin6_addr) <= 0) {
+        std::cerr << "Invalid address.\n";
+        return 1;
+    }
+
+    // Sending the message
+    int sentBytes = sendto(sock, message, std::strlen(message), 0,
+                           reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(sockaddr_in6));
+
+    if (sentBytes == -1) {
+        std::cerr << "Failed to send data.\n";
+    } else {
+        std::cout << "Sent " << sentBytes << " bytes to the server.\n";
+    }
+
+    close(sock);
+    return 0;
+
+}
+
+
+void handle_domain(struct parsed_arguments* args)
+{
+
+	struct hostent *host_info;
+    struct in_addr **addr_list;
+    host_info = gethostbyname(args->server);
+    if (host_info == nullptr) {
+        std::cerr << "Failed to get server address" << std::endl;
+        exit(1);
+    }
+
+    addr_list = reinterpret_cast<struct in_addr **>(host_info->h_addr_list);
+
+	strcpy(args->server, inet_ntoa(*addr_list[0]));
 }
 
 
@@ -413,33 +620,53 @@ int main(int argc, char* argv[]) {
 
 	struct parsed_arguments *args = (struct parsed_arguments*)malloc(sizeof(struct parsed_arguments));
 	args->port = DNS_PORT;
-	strcpy(args->server, "8.8.8.8");
 	parse_arguments(argc, argv, args);
-	if (1 == 12)
+
+
+	if (false)
 	{
 		std::cout << "recursion: " << args->recursion << "\n";
 		std::cout << "reverse: " << args->reverse << "\n";
 		std::cout << "ipv6: " <<args->ip6 << "\n";
-		//std::cout << args->server << "\n";
+		std::cout << args->server << "\n";
 		std::cout << "port: " << args->port << "\n";
-		//std::cout << args->hostname << "\n";
+		std::cout << args->hostname << "\n";
 	}
+
+
+	if (args->server[0] == '\0')
+	{
+		std::cerr << "-s argument is missing" << std::endl;
+		return 1;
+	}
+
+	
 	int server_type = get_address_type(args->server);
 	switch(server_type)
 	{
 		case TYPE_DOMAIN:
-			struct hostent *host_info;
-			host_info = gethostbyname(args->server);
-			strcpy(args->server, host_info->h_name);
+			handle_domain(args);
 			send_dns_query(args);
 			break;
 		case TYPE_IP4:
 			send_dns_query(args);
 			break;
 		case TYPE_IP6:
+			std::cout<< "nig" << std::endl;
+			send_dns_query_6_x(args);
 			break;
 	}
 
 	free(args);
     return 0;
 }
+
+
+// TODO ip6 adresa serveru - sendto
+// check for error in answer
+// reverse answer ip6 OR ip4
+// print ipv6 address in format from ipk AAAA query
+
+// something with kazi.fit.vutbr.cz ns instead of answer
+// reverse print - OK
+// timeout sendto
