@@ -401,20 +401,25 @@ void send_dns_query(struct parsed_arguments* args)
 	}
 	else
 	{
-		std::cout << "start" << std::endl;
 		//reverse
 		int i = 1;
+		int letters = buf_pointer[0];
 		while (buf_pointer[i] != '\0')
 		{
-			if (buf_pointer[i] < 64)
+			if (letters == 0)
 			{
 				std::cout << '.';
+				letters = buf_pointer[i];
 			}
-			std::cout << buf_pointer[i];
+			else
+			{
+				std::cout << buf_pointer[i];
+				letters--;
+			}
+
 			i++;
 		}
 		std::cout << std::endl;
-		std::cout << "end" << std::endl;
 	}
 }
 
@@ -562,42 +567,6 @@ void send_dns_query_6(struct parsed_arguments* args)
 	}
 }
 
-int send_dns_query_6_x(struct parsed_arguments* args)
-{
-	int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock == -1) {
-        std::cerr << "Socket creation failed.\n";
-        return 1;
-    }
-
-    const char *message = "Hello, IPv6!";
-
-    sockaddr_in6 serverAddress;
-    std::memset(&serverAddress, 0, sizeof(serverAddress));
-    serverAddress.sin6_family = AF_INET6; // Use IPv6
-    serverAddress.sin6_port = htons(8080); // Port to send data to
-
-    // Set the IPv6 address you want to send the packet to
-    if (inet_pton(AF_INET6, "2001:0db8:85a3:0000:0000:8a2e:0370:7334", &serverAddress.sin6_addr) <= 0) {
-        std::cerr << "Invalid address.\n";
-        return 1;
-    }
-
-    // Sending the message
-    int sentBytes = sendto(sock, message, std::strlen(message), 0,
-                           reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(sockaddr_in6));
-
-    if (sentBytes == -1) {
-        std::cerr << "Failed to send data.\n";
-    } else {
-        std::cout << "Sent " << sentBytes << " bytes to the server.\n";
-    }
-
-    close(sock);
-    return 0;
-
-}
-
 
 void handle_domain(struct parsed_arguments* args)
 {
@@ -652,8 +621,8 @@ int main(int argc, char* argv[]) {
 			send_dns_query(args);
 			break;
 		case TYPE_IP6:
-			std::cout<< "nig" << std::endl;
-			send_dns_query_6_x(args);
+			std::cout<< "ip6" << std::endl;
+			send_dns_query_6(args);
 			break;
 	}
 
