@@ -4,4 +4,4 @@ dependencies:
 	sudo apt update
 	sudo apt install g++
 clean:
-	rm ipk-sniffer
+	rm dns

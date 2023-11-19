@@ -3,18 +3,17 @@
 #include "encoder.cpp"
 #include "printer.cpp"
 
-
 /// @brief returns true if name is compressed
-/// @param name 
-/// @return 
+/// @param name
+/// @return
 bool is_name_compressed(unsigned char *name)
 {
 	return (name[0] == 0b11000000);
 }
 
 /// @brief returns the offset of compressed name (14 last bits)
-/// @param name 
-/// @return 
+/// @param name
+/// @return
 int get_compressed_offset(unsigned char *name)
 {
 	return ((name[0] & 0x3F) << 8) + name[1];
@@ -111,9 +110,6 @@ void send_and_receive(unsigned char *buf, int sock, struct sockaddr *dest, unsig
 	}
 }
 
-
-
-
 /// @brief Main function for communication with the server
 /// @param args parsed arguments
 void send_dns_query(struct parsed_arguments *args)
@@ -137,6 +133,7 @@ void send_dns_query(struct parsed_arguments *args)
 		else
 		{
 			std::cerr << "Address is not domain type\n";
+			free(args);
 			exit(1);
 		}
 	}
@@ -154,6 +151,7 @@ void send_dns_query(struct parsed_arguments *args)
 		else
 		{
 			std::cerr << "Address is not IP type\n";
+			free(args);
 			exit(1);
 		}
 		//-6 cant because its  AAAA and -x is PTR hmmmmm
@@ -194,7 +192,7 @@ void send_dns_query(struct parsed_arguments *args)
 	}
 
 	// Check error codes
-	
+
 	uint32_t rcode = (dns->rcode);
 	if (rcode != 0)
 	{
@@ -203,10 +201,9 @@ void send_dns_query(struct parsed_arguments *args)
 		exit(1);
 	}
 
+	// print every section of answer and information
 	print_all_sections(buf, args);
 }
-
-
 
 /// @brief Main function of application
 /// @param argc

@@ -94,23 +94,23 @@ void print_type(int type)
 	{
 	case 1:
 		// print_domain(buf,buf_pointer);
-		std::cout << ", A";
+		std::cout << ", Type: A";
 		break;
 	case 28:
 		// print_domain(buf,buf_pointer);
-		std::cout << ", AAAA";
+		std::cout << ", Type: AAAA";
 		break;
 	case 5:
 		// print_domain(buf,buf_pointer);
-		std::cout << ", CNAME";
+		std::cout << ", Type: CNAME";
 		break;
 	case 2:
 		// print_domain(buf,buf_pointer);
-		std::cout << ", NS";
+		std::cout << ", Type:NS";
 		break;
 	case 12:
 		// print_domain(buf,buf_pointer);
-		std::cout << ", PTR";
+		std::cout << ", Type: PTR";
 		break;
 	default:
 		break;
@@ -133,7 +133,7 @@ void print_question_section(unsigned char buf[65536], int *offset, struct parsed
 	print_domain(buf, name_pointer);
 	print_type(ntohs(question->qtype));
 
-	std::cout << ", ";
+	std::cout << ", Class: ";
 	std::cout << (ntohs(question->qclass) ? "IN" : "Error");
 }
 
@@ -170,7 +170,7 @@ void print_answer_section(unsigned char buf[65536], int *offset, struct parsed_a
 	switch (ntohs(answer->_class))
 	{
 	case 1:
-		std::cout << "IN";
+		std::cout << "Class: IN";
 		break;
 	default:
 		std::cerr << "Class not supported";
@@ -179,7 +179,7 @@ void print_answer_section(unsigned char buf[65536], int *offset, struct parsed_a
 		break;
 	}
 
-	std::cout << ", " << std::dec << ntohl(answer->ttl) << ", " << ntohs(answer->data_len);
+	std::cout << ", TTL: " << std::dec << ntohl(answer->ttl) << ", Data length: " << ntohs(answer->data_len);
 
 	// move ahead of the dns header and the query field
 	buf_pointer = &buf[sizeof(struct dns_header) + *offset + sizeof(struct dns_question) + sizeof(struct dns_answer) * (i + 1)];
@@ -243,4 +243,5 @@ void print_all_sections(unsigned char buf[65536], struct parsed_arguments *args)
 		print_answer_section(buf, &offset, args, i);
 		i++;
 	}
+	std::cout << std::endl;
 }
