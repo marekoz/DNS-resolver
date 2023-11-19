@@ -96,21 +96,19 @@ struct dns_answer
 };
 
 
-std::string intToBinaryString(int value)
-{
-	return std::bitset<sizeof(int) * 8>(value).to_string();
-}
-
-
+// returns true if name is compressed
 bool is_name_compressed(unsigned char *name)
 {
 	return (name[0] == 0b11000000);
-}	 
+}
 
+// returns the offset of compressed name (14 last bits)
 int get_compressed_offset(unsigned char *name)
 {
-	return ((name[0] & 0x3F) << 8) + name[1]; 
+	return ((name[0] & 0x3F) << 8) + name[1];
 }
+
+//returns address type: TYPE_IP4, TYPE_IP6, TYPE_DOMAIN using regex patterns
 
 int get_address_type(char *addr)
 {
@@ -138,6 +136,7 @@ int get_address_type(char *addr)
 	return -1;
 }
 
+//parses arguments and stores them into the allocated struct
 void parse_arguments(int argc, char *argv[], struct parsed_arguments *args)
 {
 	int opt;
@@ -205,6 +204,7 @@ void parse_arguments(int argc, char *argv[], struct parsed_arguments *args)
 	// we have only 1 non option argument - address
 }
 
+//fills the dns header with data 
 void fill_dns_header(struct dns_header *dns, struct parsed_arguments *args)
 {
 	dns->id = (unsigned short)htons(getpid());
@@ -213,18 +213,20 @@ void fill_dns_header(struct dns_header *dns, struct parsed_arguments *args)
 	dns->aa = 0;			   // not authoritive
 	dns->tc = 0;			   // not truncated
 	dns->rd = args->recursion; // Recursion Desired
-	dns->ra = 0;
+	dns->ra = 0;			   // Recursion Available
 	dns->z = 0;
 	dns->ad = 0;
 	dns->cd = 0;
-	dns->rcode = 0;
+	dns->rcode = 0;				// No error
 	dns->q_count = htons(1); // 1 question
 	dns->ans_count = 0;
 	dns->auth_count = 0;
 	dns->add_count = 0;
 }
 
-void convert_hostname_to_dns(char *hostname, unsigned char *result)
+// converts domain name to dns format
+// converts www.example.com to 3www7example3com0
+void convert_domain_to_dns(char *hostname, unsigned char *result)
 {
 	int last_dot_pos = 0;
 	int char_cnt = 0;
@@ -284,26 +286,10 @@ void convert_ip6_to_dns(char *ip6, unsigned char *result)
 	return;
 }
 
-void send_and_receive(unsigned char *buf, int sock, struct sockaddr* dest, unsigned char *qname, int dest_size)
+/// @brief Prints domain name at the pointer
+/// @param buf_pointer 
+void print_domain(unsigned char *buf_pointer)
 {
-	// TIMEOUT SET WOW
-	struct timeval tv;
-	tv.tv_sec = 5;
-	tv.tv_usec = 0;
-	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
-	if (sendto(sock, (char *)buf, sizeof(struct dns_header) + (strlen((const char *)qname) + 1) + 4, 0, dest, dest_size) < 0)
-	{
-		perror("Error sending datagram");
-	}
-	if (recvfrom(sock, (char *)buf, 65536, 0, dest, (socklen_t *)&dest_size) < 0)
-	{
-		perror("Error receiving datagram");
-	}
-}
-
-void print_domain(unsigned char* buf_pointer)
-{
-	// reverse
 	int i = 1;
 	int letters = buf_pointer[0];
 	while (buf_pointer[i] != '\0')
@@ -318,72 +304,88 @@ void print_domain(unsigned char* buf_pointer)
 			std::cout << buf_pointer[i];
 			letters--;
 		}
-		i++;			
+		i++;
 	}
 	std::cout << '.';
 }
 
-void print_ip6(unsigned char* buf_pointer)
+/// @brief prints the ip6 address at the pointer
+/// @param buf_pointer 
+void print_ip6(unsigned char *buf_pointer)
 {
 	// ipv6 TODO
-    for (int i = 0; i < 16; i += 2) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(buf_pointer[i]);
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(buf_pointer[i + 1]);
+	for (int i = 0; i < 16; i += 2)
+	{
+		std::cout << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(buf_pointer[i]);
+		std::cout << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(buf_pointer[i + 1]);
 
-        if (i < 14) {
-            std::cout << ":";
-        }
-    }
+		if (i < 14)
+		{
+			std::cout << ":";
+		}
+	}
 }
 
-void print_ip4(unsigned char* buf_pointer)
+/// @brief prints the ip4 address at the pointer
+/// @param buf_pointer 
+void print_ip4(unsigned char *buf_pointer)
 {
 	std::cout << std::dec << (int)buf_pointer[0] << ".";
-	std::cout << std::dec << (int)buf_pointer[1] << "."; 
+	std::cout << std::dec << (int)buf_pointer[1] << ".";
 	std::cout << std::dec << (int)buf_pointer[2] << ".";
 	std::cout << std::dec << (int)buf_pointer[3];
 }
 
-
-void print_question_section(unsigned char buf[65536], int* offset, struct parsed_arguments* args)
+/// @brief prints the question section. Always only once because we can only ask 1 question
+/// @param buf 
+/// @param offset 
+/// @param args 
+void print_question_section(unsigned char buf[65536], int *offset, struct parsed_arguments *args)
 {
-	std::cout << std::endl << "  ";
-	unsigned char *name_pointer = &buf[sizeof(struct dns_header)]; //Only 1 question is allowed
-	*offset = (strlen((const char *)name_pointer)) + 1; // \0 -> +1 
+	std::cout << std::endl
+			  << "  ";
+	unsigned char *name_pointer = &buf[sizeof(struct dns_header)]; // Only 1 question is allowed
+	*offset = (strlen((const char *)name_pointer)) + 1;			   // \0 -> +1
 
-	struct dns_question* question = (struct dns_question*)&buf[sizeof(struct dns_header) + *offset];
+	struct dns_question *question = (struct dns_question *)&buf[sizeof(struct dns_header) + *offset];
 
 	switch (ntohs(question->qtype))
 	{
-		case 1:
-			print_domain(name_pointer);
-			std::cout << ", A";
-			break;
-		case 28:
-			print_domain(name_pointer);
-			std::cout << ", AAAA";
-			break;
-		case 12:
-			print_domain(name_pointer);
-			std::cout << ", PTR";
-			break;
-		default:
-			break;
+	case 1:
+		print_domain(name_pointer);
+		std::cout << ", A";
+		break;
+	case 28:
+		print_domain(name_pointer);
+		std::cout << ", AAAA";
+		break;
+	case 12:
+		print_domain(name_pointer);
+		std::cout << ", PTR";
+		break;
+	default:
+		break;
 	}
 
-	//std:: cout << (ntohs(question->qtype) ? "A" : "AAAA");
+	// std:: cout << (ntohs(question->qtype) ? "A" : "AAAA");
 	std::cout << ", ";
 	std::cout << (ntohs(question->qclass) ? "IN" : "");
 }
 
 
-void print_answer_section(unsigned char buf[65536], int*offset, struct parsed_arguments* args, int i)
+/// @brief Prints the i-th answer/authority/additional section
+/// @param buf buffer with answer 
+/// @param offset current offset (sum of data_len of previous sectoins)
+/// @param args 
+/// @param i i-th section
+void print_answer_section(unsigned char buf[65536], int *offset, struct parsed_arguments *args, int i)
 {
-	std::cout << std::endl << "  ";
-	unsigned char *buf_pointer = &buf[sizeof(struct dns_header) + sizeof(struct dns_answer)*i + sizeof(struct dns_question) + *offset];
+	std::cout << std::endl
+			  << "  ";
+	unsigned char *buf_pointer = &buf[sizeof(struct dns_header) + sizeof(struct dns_answer) * i + sizeof(struct dns_question) + *offset];
 
 	struct dns_answer *answer = NULL;
-	
+
 	if (is_name_compressed(buf_pointer))
 	{
 		answer = (struct dns_answer *)(buf_pointer + 2);
@@ -392,90 +394,139 @@ void print_answer_section(unsigned char buf[65536], int*offset, struct parsed_ar
 	}
 	else
 	{
-		int name_len = strlen((const char*)buf_pointer) + 1;
+		int name_len = strlen((const char *)buf_pointer) + 1;
 		answer = (struct dns_answer *)buf_pointer + name_len;
 		*offset += name_len;
 	}
 
 	switch (ntohs(answer->type))
 	{
-		case 1:
-			print_domain(buf_pointer);
-			std::cout << ", A";
-			break;
-		case 28:
-			print_domain(buf_pointer);
-			std::cout << ", AAAA";
-			break;
-		case 5:
-			print_domain(buf_pointer);
-			std::cout << ", CNAME";
-			break;
-		case 2:
-			print_domain(buf_pointer);
-			std::cout << ", NS";
-			break;
-		case 12:
-			print_domain(buf_pointer);
-			std::cout << ", PTR";
-			break;
-		default:
-			break;
+	case 1:
+		print_domain(buf_pointer);
+		std::cout << ", A";
+		break;
+	case 28:
+		print_domain(buf_pointer);
+		std::cout << ", AAAA";
+		break;
+	case 5:
+		print_domain(buf_pointer);
+		std::cout << ", CNAME";
+		break;
+	case 2:
+		print_domain(buf_pointer);
+		std::cout << ", NS";
+		break;
+	case 12:
+		print_domain(buf_pointer);
+		std::cout << ", PTR";
+		break;
+	default:
+		break;
 	}
-	
+
 	std::cout << ", ";
 	switch (ntohs(answer->_class))
 	{
-		case 1:
-			std::cout << "IN";
-			break;
-		default:
-			std::cerr << "Class not supported";
-			free(args);
-			exit(1);
-			break;
+	case 1:
+		std::cout << "IN";
+		break;
+	default:
+		std::cerr << "Class not supported";
+		free(args);
+		exit(1);
+		break;
 	}
-	
-	
+
 	std::cout << ", " << std::dec << ntohl(answer->ttl) << ", " << ntohs(answer->data_len);
-	
+
 	// move ahead of the dns header and the query field
-	buf_pointer = &buf[sizeof(struct dns_header) + *offset
-	+ sizeof(struct dns_question) + sizeof(struct dns_answer)*(i+1)];
+	buf_pointer = &buf[sizeof(struct dns_header) + *offset + sizeof(struct dns_question) + sizeof(struct dns_answer) * (i + 1)];
 	*offset += ntohs(answer->data_len);
 	switch (ntohs(answer->type))
 	{
-		case 1:
-			std::cout << ", ";
-			print_ip4(buf_pointer);
-			break;
-		case 28:
-			std::cout << ", ";
-			print_ip6(buf_pointer);
-			break;
-		case 5:
-			std::cout << ", ";
+	case 1:
+		std::cout << ", ";
+		print_ip4(buf_pointer);
+		break;
+	case 28:
+		std::cout << ", ";
+		print_ip6(buf_pointer);
+		break;
+	case 5:
+		std::cout << ", ";
 
-			if(is_name_compressed(buf_pointer))
-			{	
-				buf_pointer = &buf[get_compressed_offset(buf_pointer)];
-			}
-			print_domain(buf_pointer);
-			break;
-		case 12:
-			std::cout << ", ";
-			if(is_name_compressed(buf_pointer))
-			{
-				buf_pointer = &buf[get_compressed_offset(buf_pointer)];
-			}
-			print_domain(buf_pointer);
-			break;
-		default:
-			break;
+		if (is_name_compressed(buf_pointer))
+		{
+			buf_pointer = &buf[get_compressed_offset(buf_pointer)];
+		}
+		print_domain(buf_pointer);
+		break;
+	case 12:
+		std::cout << ", ";
+		if (is_name_compressed(buf_pointer))
+		{
+			buf_pointer = &buf[get_compressed_offset(buf_pointer)];
+		}
+		print_domain(buf_pointer);
+		break;
+	default:
+		break;
+	}
+}
+
+/// @brief prints answer error codes before exiting
+/// @param rcode 
+void print_rcode(int rcode)
+{
+	switch (rcode)
+	{
+	case 1:
+		std::cerr << "Error: Format error (1)" << std::endl;
+		break;
+	case 2:
+		std::cerr << "Error: Server failure (2)" << std::endl;
+		break;
+	case 3:
+		std::cerr << "Error: Name error (3)" << std::endl;
+		break;
+	case 5:
+		std::cerr << "Error: Refused (5)" << std::endl;
+		break;
+	default:
+		std::cerr << "Error: " << rcode << std::endl;
+		break;
 	}
 }
 
 
+/// @brief sends and receives datagram using sendto and recvfrom, UDP only
+/// @param buf 
+/// @param sock 
+/// @param dest 
+/// @param qname 
+/// @param dest_size 
+void send_and_receive(unsigned char *buf, int sock, struct sockaddr *dest, unsigned char *qname, int dest_size)
+{
+	// set timeout at 5 seconds
+	struct timeval tv;
+	tv.tv_sec = 5;
+	tv.tv_usec = 0;
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
+
+	if (sendto(sock, (char *)buf, sizeof(struct dns_header) + (strlen((const char *)qname) + 1) + 4, 0, dest, dest_size) < 0)
+	{
+		perror("Error sending datagram");
+	}
+	if (recvfrom(sock, (char *)buf, 65536, 0, dest, (socklen_t *)&dest_size) < 0)
+	{
+		perror("Error receiving datagram");
+	}
+}
+
+
+/// @brief Main function for communication with the server
+/// @param args parsed arguments
 void send_dns_query(struct parsed_arguments *args)
 {
 	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); // UDP packet for DNS queries
@@ -491,11 +542,9 @@ void send_dns_query(struct parsed_arguments *args)
 	qname = (unsigned char *)&buf[sizeof(struct dns_header)];
 	if (args->reverse == 0)
 	{
-		// if hostname == hostname
-		// otherwise done
 		if (get_address_type(args->hostname) == TYPE_DOMAIN)
 		{
-			convert_hostname_to_dns(args->hostname, qname);
+			convert_domain_to_dns(args->hostname, qname);
 		}
 		else
 		{
@@ -510,9 +559,9 @@ void send_dns_query(struct parsed_arguments *args)
 		{
 			convert_ip4_to_dns(args->hostname, qname);
 		}
-		else if(addr_type == TYPE_IP6)
+		else if (addr_type == TYPE_IP6)
 		{
-			//convert_ip6_to_dns()
+			// convert_ip6_to_dns()
 		}
 		else
 		{
@@ -535,14 +584,13 @@ void send_dns_query(struct parsed_arguments *args)
 
 	question->qclass = htons(1); // type IN
 
-
 	if (args->address_type == 0)
 	{
 		struct sockaddr_in dest;
 		dest.sin_family = AF_INET;
 		dest.sin_port = htons(args->port);
 		dest.sin_addr.s_addr = inet_addr(args->server);
-		send_and_receive(buf, sock, (struct sockaddr*)&dest, qname, sizeof(dest));
+		send_and_receive(buf, sock, (struct sockaddr *)&dest, qname, sizeof(dest));
 	}
 	else
 	{
@@ -552,38 +600,22 @@ void send_dns_query(struct parsed_arguments *args)
 		dest.sin6_family = AF_INET6;
 		std::cout << args->server << std::endl;
 		inet_pton(AF_INET6, args->server, &dest.sin6_addr);
-		send_and_receive(buf, sock, (struct sockaddr*)&dest, qname, sizeof(dest));
+		send_and_receive(buf, sock, (struct sockaddr *)&dest, qname, sizeof(dest));
 	}
 
 	// Check error codes
 	dns = (struct dns_header *)buf;
-	switch (ntohl(dns->rcode))
+	int rcode = ntohl(dns->rcode);
+	if (rcode != 0)
 	{
-	case 1:
-		std::cerr << "Error: Format error" << std::endl;
+		print_rcode(rcode);
 		free(args);
 		exit(1);
-		break;
-	case 2:
-		std::cerr << "Error: Server failure" << std::endl;
-		free(args);
-		exit(1);
-		break;
-	case 3:
-		std::cerr << "Error: Name error" << std::endl;
-		free(args);
-		exit(1);
-		break;
-	case 5:
-		free(args);
-		exit(1);
-		std::cerr << "Error: Refused" << std::endl;
-	default:
-		break;
 	}
 
-	std::cout << "Authoritative: " << ((dns->aa) ? "Yes" : "No") << ", Recursive: " << ((dns->rd) ? "Yes" : "No") << ", Truncated: " << ((dns->tc) ? "Yes" : "No")<< std::endl; 
-
+	std::cout << "Authoritative: " << ((dns->aa) ? "Yes" : "No");
+	std::cout << ", Recursive: " << ((dns->rd) ? "Yes" : "No");
+	std::cout << ", Truncated: " << ((dns->tc) ? "Yes" : "No") << std::endl;
 
 	int add_cnt = ntohs(dns->add_count);
 	int q_cnt = ntohs(dns->q_count);
@@ -591,68 +623,68 @@ void send_dns_query(struct parsed_arguments *args)
 	int aut_cnt = ntohs(dns->auth_count);
 	int i = 0;
 	int offset = 0;
-	std::cout << "Question section (" << q_cnt << ")"; 
+
+	std::cout << "Question section (" << q_cnt << ")";
 	print_question_section(buf, &offset, args);
-	std::cout << std::endl << "Answer section (" << ans_cnt << ")"; 
-	while(i < ans_cnt)
+
+	std::cout << std::endl
+			  << "Answer section (" << ans_cnt << ")";
+	while (i < ans_cnt)
 	{
 		print_answer_section(buf, &offset, args, i);
 		i++;
 	}
-	std::cout << std::endl << "Authority section (" << aut_cnt << ")"; 
-	while(i < ans_cnt + aut_cnt)
+
+	std::cout << std::endl
+			  << "Authority section (" << aut_cnt << ")";
+	while (i < ans_cnt + aut_cnt)
 	{
 		print_answer_section(buf, &offset, args, i);
 		i++;
 	}
-	std::cout << std::endl << "Additional section (" << add_cnt << ")"; 
-	while(i < ans_cnt + aut_cnt + add_cnt)
+
+	std::cout << std::endl
+			  << "Additional section (" << add_cnt << ")";
+	while (i < ans_cnt + aut_cnt + add_cnt)
 	{
 		print_answer_section(buf, &offset, args, i);
 		i++;
 	}
 }
 
-
-void handle_domain(struct parsed_arguments *args)
+/// @brief rewrites the domain name to ipv4 address using gethostbyname. Only when -s argument is domain name
+/// @param args 
+void domain_to_address(struct parsed_arguments *args)
 {
-
 	struct hostent *host_info;
 	struct in_addr **addr_list;
 	host_info = gethostbyname(args->server);
 	if (host_info == nullptr)
 	{
-		std::cerr << "Failed to get server address" << std::endl;
+		std::cerr << "Error: Failed to get server address" << std::endl;
+		free(args);
 		exit(1);
 	}
 
 	addr_list = reinterpret_cast<struct in_addr **>(host_info->h_addr_list);
-
 	strcpy(args->server, inet_ntoa(*addr_list[0]));
 }
 
+
+/// @brief 
+/// @param argc 
+/// @param argv 
+/// @return 
 int main(int argc, char *argv[])
 {
-
 	struct parsed_arguments *args = (struct parsed_arguments *)malloc(sizeof(struct parsed_arguments));
 	args->port = DNS_PORT;
 	parse_arguments(argc, argv, args);
 
-	if (false)
-	{
-		std::cout << "recursion: " << args->recursion << "\n";
-		std::cout << "reverse: " << args->reverse << "\n";
-		std::cout << "ipv6: " << args->ip6 << "\n";
-		std::cout << args->server << "\n";
-		std::cout << "port: " << args->port << "\n";
-		std::cout << args->hostname << "\n";
-	}
-
-	
-
 	if (args->server[0] == '\0')
 	{
 		std::cerr << "-s argument is missing" << std::endl;
+		free(args);
 		return 1;
 	}
 
@@ -660,7 +692,8 @@ int main(int argc, char *argv[])
 	switch (server_type)
 	{
 	case TYPE_DOMAIN:
-		handle_domain(args);
+		// if -s is domain name, we need the find the ip4 address
+		domain_to_address(args);
 		send_dns_query(args);
 		args->address_type = 0;
 		break;
@@ -671,6 +704,11 @@ int main(int argc, char *argv[])
 	case TYPE_IP6:
 		args->address_type = 1;
 		send_dns_query(args);
+		break;
+	default:
+		std::cerr << "Error: Invalid server address\n";
+		free(args);
+		return 1;
 		break;
 	}
 
