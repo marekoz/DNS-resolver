@@ -1,3 +1,4 @@
+//author: Marek Kozumplik, xkozum08
 #include "arg_parser.hpp"
 
 /// @brief parses arguments and stores them into the allocated struct

@@ -1,0 +1,7 @@
+Authoritative: No, Recursive: Yes, Truncated: No
+Question section (1)
+  1.1.1.1.in-addr.arpa., Type: PTR, Class: IN
+Answer section (1)
+  1.1.1.1.in-addr.arpa., Type: PTR, Class: IN, TTL: <number>, Data length: 17, one.one.one.one.
+Authority section (0)
+Additional section (0)

@@ -1,3 +1,4 @@
+//author: Marek Kozumplik, xkozum08
 #pragma once
 #include "dns.hpp"
 
@@ -11,3 +12,9 @@ void convert_domain_to_dns(char *hostname, unsigned char *result);
 /// @param result 
 void convert_ip4_to_dns(char *ip4, unsigned char *result);
 
+
+
+/// @brief converts ip4 address to dns format. For -x
+/// @param ip6
+/// @param result 
+void convert_ip6_to_dns(char *ip6, unsigned char *result);

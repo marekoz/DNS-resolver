@@ -1,23 +1,10 @@
+//author: Marek Kozumplik, xkozum08
 #include "dns.hpp"
 #include "arg_parser.cpp"
 #include "encoder.cpp"
 #include "printer.cpp"
 
-/// @brief returns true if name is compressed
-/// @param name
-/// @return
-bool is_name_compressed(unsigned char *name)
-{
-	return (name[0] == 0b11000000);
-}
 
-/// @brief returns the offset of compressed name (14 last bits)
-/// @param name
-/// @return
-int get_compressed_offset(unsigned char *name)
-{
-	return ((name[0] & 0x3F) << 8) + name[1];
-}
 
 /// @brief returns address type: TYPE_IP4, TYPE_IP6, TYPE_DOMAIN using regex patterns
 /// @param addr
@@ -92,7 +79,7 @@ void domain_to_address(struct parsed_arguments *args)
 /// @param dest
 /// @param qname
 /// @param dest_size
-void send_and_receive(unsigned char *buf, int sock, struct sockaddr *dest, unsigned char *qname, int dest_size)
+void send_and_receive(unsigned char *buf, int sock, struct sockaddr *dest, unsigned char *qname, int dest_size, struct parsed_arguments *args)
 {
 	// set timeout at 5 seconds
 	struct timeval tv;
@@ -107,6 +94,8 @@ void send_and_receive(unsigned char *buf, int sock, struct sockaddr *dest, unsig
 	if (recvfrom(sock, (char *)buf, 65536, 0, dest, (socklen_t *)&dest_size) < 0)
 	{
 		perror("Error receiving datagram");
+		free(args);
+		exit(1);
 	}
 }
 
@@ -177,7 +166,7 @@ void send_dns_query(struct parsed_arguments *args)
 		dest.sin_family = AF_INET;
 		dest.sin_port = htons(args->port);
 		dest.sin_addr.s_addr = inet_addr(args->server);
-		send_and_receive(buf, sock, (struct sockaddr *)&dest, qname, sizeof(dest));
+		send_and_receive(buf, sock, (struct sockaddr *)&dest, qname, sizeof(dest), args);
 	}
 	else
 	{
@@ -188,11 +177,10 @@ void send_dns_query(struct parsed_arguments *args)
 		dest.sin6_family = AF_INET6;
 		std::cout << args->server << std::endl;
 		inet_pton(AF_INET6, args->server, &dest.sin6_addr);
-		send_and_receive(buf, sock, (struct sockaddr *)&dest, qname, sizeof(dest));
+		send_and_receive(buf, sock, (struct sockaddr *)&dest, qname, sizeof(dest), args);
 	}
 
 	// Check error codes
-
 	uint32_t rcode = (dns->rcode);
 	if (rcode != 0)
 	{
@@ -213,6 +201,11 @@ int main(int argc, char *argv[])
 {
 	struct parsed_arguments *args = (struct parsed_arguments *)malloc(sizeof(struct parsed_arguments));
 	args->port = DNS_PORT;
+	args->recursion = 0;
+	args->address_type = 0;
+	args->reverse = 0;
+	args->ip6 = 0;
+
 	parse_arguments(argc, argv, args);
 
 	if (args->server[0] == '\0')
@@ -251,3 +244,4 @@ int main(int argc, char *argv[])
 }
 
 // reverse answer ip6 OR ip4
+// doc, readme, testy, get_address_type

@@ -1,9 +1,10 @@
+#author: Marek Kozumplik, xkozum08
 import subprocess
 import re
 
 test_folder = "tests/"
-input_files = ["test1.in", "test2.in"]  # List of input file names
-output_files = ["test1.out", "test2.out"]  # List of output file names
+input_files = ["test1.in", "test2.in", "test3.in"]  # List of input file names
+output_files = ["test1.out", "test2.out", "test3.out"]  # List of output file names
 
 test_cases = []
 for input_file, output_file in zip(input_files, output_files):
@@ -22,6 +23,7 @@ for case in test_cases:
     process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)
     output, _ = process.communicate()
 
+
     # Check if the output matches the expected output pattern
     expected_output_pattern = re.compile(re.escape(case["expected_output"]))
 
@@ -33,6 +35,15 @@ for case in test_cases:
         i += 1
     else:
         print(f"Test Failed: Input '{case['input']}'")
+        print()
+        print("Test output: ")
+        print(output_without_ttl)
+        
+        print()
+        print("Expected output: ")
+        print(case["expected_output"])
+        print()
+        print()
 
 print(str(i)+"/"+str(test_cnt)+" tests passed")
 

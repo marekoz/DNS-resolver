@@ -1,3 +1,4 @@
+//author: Marek Kozumplik, xkozum08
 #include "encoder.hpp"
 
 
@@ -9,7 +10,7 @@ void convert_domain_to_dns(char *hostname, unsigned char *result)
     int last_dot_pos = 0;
     int char_cnt = 0;
     int i = 0;
-    for (i = 0; hostname[i] != '\0'; i++)
+    while(hostname[i] != '\0')
     {
         if (hostname[i] == '.')
         {
@@ -22,11 +23,15 @@ void convert_domain_to_dns(char *hostname, unsigned char *result)
             char_cnt += 1;
             result[i + 1] = hostname[i];
         }
+        i++;
     }
     result[last_dot_pos] = char_cnt;
     result[i + 1] = '\0';
 }
 
+/// @brief Converts IPv4 to dns format for reverse query. Example: 8.8.4.4 to 4.4.8.8.in-addr.arpa but numbers instead of '.'
+/// @param ip4 
+/// @param result 
 void convert_ip4_to_dns(char *ip4, unsigned char *result)
 {
     char *all_parts = (char *)malloc(16);

@@ -1,13 +1,30 @@
+//author: Marek Kozumplik, xkozum08
 #include "printer.hpp"
+
+/// @brief returns true if name is compressed
+/// @param name
+/// @return
+bool is_name_compressed(unsigned char *name)
+{
+	return (name[0] == 0b11000000);
+}
+
+/// @brief returns the offset of compressed name (14 last bits)
+/// @param name
+/// @return
+int get_compressed_offset(unsigned char *name)
+{
+	return ((name[0] & 0x3F) << 8) + name[1];
+}
 
 /// @brief Prints domain at the pointer
 /// @param buf_pointer
 void print_domain(unsigned char buf[65536], unsigned char *buf_pointer)
 {
-	if (is_name_compressed(&buf_pointer[0]))
+	if (is_name_compressed(buf_pointer))
 	{
-		buf_pointer = &buf[get_compressed_offset(&buf_pointer[0])];
-		print_domain(buf, &buf_pointer[0]);
+		buf_pointer = &buf[get_compressed_offset(buf_pointer)];
+		print_domain(buf, buf_pointer);
 		return;
 	}
 	int i = 1;
@@ -155,6 +172,7 @@ void print_answer_section(unsigned char buf[65536], int *offset, struct parsed_a
 		answer = (struct dns_answer *)(buf_pointer + 2);
 		//*offset += 2;
 		buf_pointer = &buf[get_compressed_offset(buf_pointer)];
+		
 	}
 	else
 	{
@@ -174,8 +192,6 @@ void print_answer_section(unsigned char buf[65536], int *offset, struct parsed_a
 		break;
 	default:
 		std::cerr << "Class not supported";
-		free(args);
-		exit(1);
 		break;
 	}
 

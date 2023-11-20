@@ -1,3 +1,4 @@
+//author: Marek Kozumplik, xkozum08
 #pragma once
 
 #include <iostream> //cout
@@ -10,7 +11,6 @@
 #include <bitset>
 #include <regex>
 #include <iomanip>
-
 
 #define DNS_PORT 53
 #define TYPE_IP4 0
@@ -98,39 +98,29 @@ struct dns_answer
 	// data
 };
 
-/// @brief returns true if name is compressed
-/// @param name 
-/// @return 
-bool is_name_compressed(unsigned char *name);
-
-
-/// @brief returns the offset of compressed name (14 last bits)
-/// @param name 
-/// @return 
-int get_compressed_offset(unsigned char *name);
-
 /// @brief returns address type: TYPE_IP4, TYPE_IP6, TYPE_DOMAIN using regex patterns
 /// @param addr
 /// @return
 int get_address_type(char *addr);
 
 /// @brief fills the dns header with data
-/// @param dns 
-/// @param args 
+/// @param dns
+/// @param args
 void fill_dns_header(struct dns_header *dns, struct parsed_arguments *args);
 
 /// @brief rewrites the domain name to ipv4 address using gethostbyname. Only when -s argument is domain name
-/// @param args 
+/// @param args
 void domain_to_address(struct parsed_arguments *args);
 
 /// @brief sends and receives datagram using sendto and recvfrom, UDP only
-/// @param buf 
-/// @param sock 
-/// @param dest 
-/// @param qname 
-/// @param dest_size 
-void send_and_receive(unsigned char *buf, int sock, struct sockaddr *dest, unsigned char *qname, int dest_size);
+/// @param buf
+/// @param sock
+/// @param dest
+/// @param qname
+/// @param dest_size
+/// @param args
+void send_and_receive(unsigned char *buf, int sock, struct sockaddr *dest, unsigned char *qname, int dest_size, struct parsed_arguments *args);
 
 /// @brief Main function for communication with the server
-/// @param args 
+/// @param args
 void send_dns_query(struct parsed_arguments *args);
