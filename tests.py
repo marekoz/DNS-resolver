@@ -3,8 +3,8 @@ import subprocess
 import re
 
 test_folder = "tests/"
-input_files = ["test1.in", "test2.in", "test3.in"]  # List of input file names
-output_files = ["test1.out", "test2.out", "test3.out"]  # List of output file names
+input_files = ["1.in", "2.in", "3.in", "6.in", "er1.in" ,"er2.in" , "er3.in" ,"x1.in", "x2.in", "x3.in", "x4.in",]  # List of input file names
+output_files = ["1.out", "2.out", "3.out", "6.out" ,"er1.out" ,"er2.out" ,"er3.out" , "x1.out", "x2.out", "x3.out", "x4.out"]  # List of output file names
 
 test_cases = []
 for input_file, output_file in zip(input_files, output_files):
@@ -25,20 +25,16 @@ for case in test_cases:
 
 
     # Check if the output matches the expected output pattern
-    expected_output_pattern = re.compile(re.escape(case["expected_output"]))
-
-    # Replace TTL and the number with a placeholder for comparison
-    output_without_ttl = re.sub(r'TTL: \d+,', 'TTL: <number>,', output)
-
-    if expected_output_pattern.search(output_without_ttl):
+    expected_output_re = re.compile(re.escape(case["expected_output"]))
+    output2 = re.sub(r'TTL: \d+,', 'TTL: <number>,', output) # Replace TTL
+    if expected_output_re.search(output2):
         print(f"Test Passed: ./dns '{case['input']}'")
         i += 1
     else:
         print(f"Test Failed: Input '{case['input']}'")
         print()
         print("Test output: ")
-        print(output_without_ttl)
-        
+        print(output2)
         print()
         print("Expected output: ")
         print(case["expected_output"])

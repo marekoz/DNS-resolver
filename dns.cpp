@@ -1,17 +1,14 @@
-//author: Marek Kozumplik, xkozum08
+// author: Marek Kozumplik, xkozum08
 #include "dns.hpp"
 #include "arg_parser.cpp"
 #include "encoder.cpp"
 #include "printer.cpp"
-
-
 
 /// @brief returns address type: TYPE_IP4, TYPE_IP6, TYPE_DOMAIN using regex patterns
 /// @param addr
 /// @return
 int get_address_type(char *addr)
 {
-	// std::cout << std::endl <<args->server << std::endl;
 	std::regex ipv4Pattern(R"((\d{1,3}\.){3}\d{1,3})");
 	std::regex ipv6Pattern(R"(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}(:[0-9a-fA-F]{1,4}){1,7}|([0-9a-fA-F]{1,4}:){1,7}:|::)");
 	std::regex domainPattern(R"(([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})");
@@ -19,17 +16,14 @@ int get_address_type(char *addr)
 
 	if (std::regex_match(server_str, ipv4Pattern))
 	{
-		// std::cout << "ip4" << std::endl;
 		return TYPE_IP4;
 	}
 	else if (std::regex_match(server_str, ipv6Pattern))
 	{
-		// std::cout << "ip6" << std::endl;
 		return TYPE_IP6;
 	}
 	else if (std::regex_match(server_str, domainPattern))
 	{
-		// std::cout << "domain" << std::endl;
 		return TYPE_DOMAIN;
 	}
 	return -1;
@@ -135,7 +129,7 @@ void send_dns_query(struct parsed_arguments *args)
 		}
 		else if (addr_type == TYPE_IP6)
 		{
-			// convert_ip6_to_dns()
+			convert_ip6_to_dns(args->hostname, qname);
 		}
 		else
 		{
@@ -143,21 +137,20 @@ void send_dns_query(struct parsed_arguments *args)
 			free(args);
 			exit(1);
 		}
-		//-6 cant because its  AAAA and -x is PTR hmmmmm
 	}
 
 	question = (struct dns_question *)&buf[sizeof(dns_header) + strlen((const char *)qname) + 1]; // +1 because of 0 at the end of string
 
 	if (args->reverse == 0)
 	{
-		question->qtype = (args->ip6) ? htons(28) : htons(1); // type of the query, 1-A, 28-AAAA, 12 - PTR
+		question->q_type = (args->ip6) ? htons(28) : htons(1); // type of the query, 1-A, 28-AAAA, 12 - PTR
 	}
 	else
 	{
-		question->qtype = htons(12); // PTR
+		question->q_type = htons(12); // PTR
 	}
 
-	question->qclass = htons(1); // type IN
+	question->q_class = htons(1); // type IN
 
 	if (args->address_type == 0)
 	{
@@ -243,5 +236,3 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-// reverse answer ip6 OR ip4
-// doc, readme, testy, get_address_type

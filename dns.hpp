@@ -1,4 +1,4 @@
-//author: Marek Kozumplik, xkozum08
+// author: Marek Kozumplik, xkozum08
 #pragma once
 
 #include <iostream> //cout
@@ -83,8 +83,8 @@ struct dns_header
 struct dns_question
 {
 	// unsigned char *qname; qname has dynamic length
-	unsigned short qtype;
-	unsigned short qclass;
+	unsigned short q_type;
+	unsigned short q_class;
 };
 
 // Define a structure for the DNS answer resource record (RR).

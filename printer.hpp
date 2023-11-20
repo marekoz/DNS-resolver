@@ -1,4 +1,4 @@
-//author: Marek Kozumplik, xkozum08
+// author: Marek Kozumplik, xkozum08
 #pragma once
 #include "dns.hpp"
 

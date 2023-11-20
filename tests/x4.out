@@ -1,0 +1,7 @@
+Authoritative: No, Recursive: Yes, Truncated: No
+Question section (1)
+  3.121.82.140.in-addr.arpa., Type: PTR, Class: IN
+Answer section (1)
+  3.121.82.140.in-addr.arpa., Type: PTR, Class: IN, TTL: <number>, Data length: 32, lb-140-82-121-3-fra.github.com.
+Authority section (0)
+Additional section (0)

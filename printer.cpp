@@ -1,4 +1,4 @@
-//author: Marek Kozumplik, xkozum08
+// author: Marek Kozumplik, xkozum08
 #include "printer.hpp"
 
 /// @brief returns true if name is compressed
@@ -15,6 +15,7 @@ bool is_name_compressed(unsigned char *name)
 int get_compressed_offset(unsigned char *name)
 {
 	return ((name[0] & 0x3F) << 8) + name[1];
+	// last 6 bits of first byte and all of second byte
 }
 
 /// @brief Prints domain at the pointer
@@ -148,10 +149,10 @@ void print_question_section(unsigned char buf[65536], int *offset, struct parsed
 	struct dns_question *question = (struct dns_question *)&buf[sizeof(struct dns_header) + *offset];
 
 	print_domain(buf, name_pointer);
-	print_type(ntohs(question->qtype));
+	print_type(ntohs(question->q_type));
 
 	std::cout << ", Class: ";
-	std::cout << (ntohs(question->qclass) ? "IN" : "Error");
+	std::cout << (ntohs(question->q_class) ? "IN" : "Error");
 }
 
 /// @brief Prints the i-th answer/authority/additional section
@@ -172,7 +173,6 @@ void print_answer_section(unsigned char buf[65536], int *offset, struct parsed_a
 		answer = (struct dns_answer *)(buf_pointer + 2);
 		//*offset += 2;
 		buf_pointer = &buf[get_compressed_offset(buf_pointer)];
-		
 	}
 	else
 	{
