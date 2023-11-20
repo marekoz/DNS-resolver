@@ -111,24 +111,22 @@ void print_type(int type)
 	switch (type)
 	{
 	case 1:
-		// print_domain(buf,buf_pointer);
 		std::cout << ", Type: A";
 		break;
 	case 28:
-		// print_domain(buf,buf_pointer);
 		std::cout << ", Type: AAAA";
 		break;
 	case 5:
-		// print_domain(buf,buf_pointer);
 		std::cout << ", Type: CNAME";
 		break;
 	case 2:
-		// print_domain(buf,buf_pointer);
 		std::cout << ", Type:NS";
 		break;
 	case 12:
-		// print_domain(buf,buf_pointer);
 		std::cout << ", Type: PTR";
+		break;
+	case 6:
+		std::cout << ", Type: SOA";
 		break;
 	default:
 		break;

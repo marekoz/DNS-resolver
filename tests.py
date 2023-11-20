@@ -3,8 +3,12 @@ import subprocess
 import re
 
 test_folder = "tests/"
-input_files = ["1.in", "2.in", "3.in", "6.in", "er1.in" ,"er2.in" , "er3.in" ,"x1.in", "x2.in", "x3.in", "x4.in",]  # List of input file names
-output_files = ["1.out", "2.out", "3.out", "6.out" ,"er1.out" ,"er2.out" ,"er3.out" , "x1.out", "x2.out", "x3.out", "x4.out"]  # List of output file names
+input_files = ["1.in", "2.in", "3.in", "4.in", "5.in", "6.in", "7.in", 
+               "8.in", "9.in", "er1.in" ,"er2.in" , "er3.in" ,"x1.in", 
+               "x2.in", "x3.in", "x4.in", "x5.in", "x6.in", "h.in", "null.in"]  # List of input file names
+output_files = ["1.out", "2.out", "3.out", "4.out", "5.out", "6.out",
+                "7.out", "8.out", "9.out" ,"er1.out" ,"er2.out" ,"er3.out", 
+                "x1.out", "x2.out", "x3.out", "x4.out", "x5.out", "x6.out", "h.out", "null.out"]  # List of output file names
 
 test_cases = []
 for input_file, output_file in zip(input_files, output_files):

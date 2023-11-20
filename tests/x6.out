@@ -1,0 +1,7 @@
+Authoritative: No, Recursive: Yes, Truncated: No
+Question section (1)
+  e.0.0.2.0.0.0.0.0.0.0.0.0.0.0.0.f.0.8.0.4.1.0.4.0.5.4.1.0.0.a.2.ip6.arpa., Type: PTR, Class: IN
+Answer section (1)
+  e.0.0.2.0.0.0.0.0.0.0.0.0.0.0.0.f.0.8.0.4.1.0.4.0.5.4.1.0.0.a.2.ip6.arpa., Type: PTR, Class: IN, TTL: <number>, Data length: 27, prg03s13-in-x0e.1e100.net.
+Authority section (0)
+Additional section (0)
