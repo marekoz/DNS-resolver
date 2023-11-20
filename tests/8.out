@@ -2,6 +2,6 @@ Authoritative: No, Recursive: No, Truncated: No
 Question section (1)
   google.com., Type: AAAA, Class: IN
 Answer section (1)
-  google.com., Type: AAAA, Class: IN, TTL: <number>, Data length: 16, 2a00:1450:4014:080e:0000:0000:0000:200e
+  google.com., Type: AAAA, Class: IN, TTL: <number>, Data length: 16, 2a00:1450:4014:080f:0000:0000:0000:200e
 Authority section (0)
 Additional section (0)
