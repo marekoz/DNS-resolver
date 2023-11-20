@@ -37,7 +37,7 @@ Makefile, README.md, manual.pdf
 
 dns.hpp, dns.cpp, arg_parser.hpp, arg_parser.cpp, encoder.hpp, encoder.cpp, printer.hpp, printer.cpp
 
-Folder tests with .in and .out files, tests.p
+Folder tests with .in and .out files, tests.py
 ## Sources
 
 [RFC 1035](https://datatracker.ietf.org/doc/html/rfc1035) - Information on DNS servers, resolvers, queries, DNS header format, format of DNS question and answer
